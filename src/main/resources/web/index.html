@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>DataWeave Playground</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+<style>
+:root{
+  --border:#d1d5db;
+  --title:#f3f4f6;
+  --editor:#ffffff;
+  --bg:#f9fafb;
+  --primary:#2563eb;
+  --primary-hover:#1e40af;
+  --success:#16a34a;
+  --error:#dc2626;
+  --mono:ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+body.dark{
+  --bg:#0f172a;
+  --editor:#020617;
+  --title:#020617;
+  --border:#1e293b;
+  color:#e5e7eb;
+}
+
+*{box-sizing:border-box}
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif
+}
+body{
+  display:flex;
+  flex-direction:column
+}
+
+/* ===== HEADER ===== */
+header{
+  height:44px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px;
+  background:var(--editor);
+  border-bottom:1px solid var(--border);
+}
+header button{
+  height:28px;
+  font-size:12px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:0 10px;
+  background:var(--editor);
+  cursor:pointer;
+}
+header button:last-child{
+  margin-left:auto;
+}
+
+/* ===== LAYOUT ===== */
+main{
+  flex:1;
+  display:flex;
+  min-height:0;
+}
+.col{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  background:var(--editor);
+}
+
+.panel-title{
+  height:34px;
+  display:flex;
+  align-items:center;
+  padding:0 10px;
+  background:var(--title);
+  border-bottom:1px solid var(--border);
+  font-size:12px;
+  font-weight:600;
+}
+
+.editor{
+  flex:1;
+  min-height:0;
+}
+textarea,pre{
+  width:100%;
+  height:100%;
+  border:0;
+  outline:none;
+  padding:12px;
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.6;
+  background:var(--editor);
+  color:inherit;
+  resize:none;
+}
+pre{
+  margin:0;
+  white-space:pre;
+  overflow:auto;
+}
+
+.toolbar{
+  height:40px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 8px;
+  border-top:1px solid var(--border);
+}
+
+button.primary{
+  background:var(--primary);
+  color:#fff;
+  border-color:var(--primary);
+}
+button.primary:hover{
+  background:var(--primary-hover);
+}
+
+.status{
+  margin-left:auto;
+  font-size:12px;
+}
+.ok{color:var(--success)}
+.err{color:var(--error)}
+
+.copy-btn{
+  margin-left:auto;
+  height:22px;
+  font-size:11px;
+  border-radius:4px;
+}
+
+/* Resizers */
+.gutter{
+  width:6px;
+  cursor:col-resize;
+  background:#e5e7eb;
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+}
+
+/* ===== API SLIDER ===== */
+.api-drawer{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  height:60vh;
+  background:var(--editor);
+  border-top:1px solid var(--border);
+  transform:translateY(100%);
+  transition:transform .3s ease;
+  display:flex;
+  flex-direction:column;
+  z-index:1000;
+}
+.api-drawer.open{
+  transform:translateY(0);
+}
+
+.api-drawer-header{
+  height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 12px;
+  border-bottom:1px solid var(--border);
+  font-weight:600;
+}
+
+.api-drawer-body{
+  flex:1;
+  min-height:0;
+}
+.api-iframe{
+  width:100%;
+  height:100%;
+  border:none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ===== HEADER ===== -->
+<header>
+  <strong>DataWeave Playground</strong>
+  <button onclick="openApi()">API Reference</button>
+  <button id="themeToggle">🌙</button>
+</header>
+
+<!-- ===== MAIN ===== -->
+<main>
+
+  <!-- PAYLOAD -->
+  <section class="col">
+    <div class="panel-title">PAYLOAD</div>
+    <div class="editor">
+      <textarea id="input">{ "message": "Hello world!" }</textarea>
+    </div>
+    <div class="toolbar">
+      <label>Input MIME:</label>
+      <select id="inputMime">
+        <option value="application/json">application/json</option>
+        <option value="application/xml">application/xml</option>
+        <option value="text/plain">text/plain</option>
+      </select>
+    </div>
+  </section>
+
+  <div class="gutter"></div>
+
+  <!-- SCRIPT -->
+  <section class="col">
+    <div class="panel-title">
+      SCRIPT
+      <button class="copy-btn" onclick="copyText('script',this)">Copy</button>
+    </div>
+    <div class="editor">
+      <textarea id="script">%dw 2.0
+output application/json
+---
+payload.message</textarea>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="runBtn">Run ▶</button>
+      <div class="status" id="status">Ready</div>
+    </div>
+  </section>
+
+  <div class="gutter"></div>
+
+  <!-- OUTPUT -->
+  <section class="col">
+    <div class="panel-title">
+      OUTPUT
+      <button class="copy-btn" onclick="copyText('output',this)">Copy</button>
+    </div>
+    <div class="editor">
+      <pre id="output"></pre>
+    </div>
+    <div class="toolbar">
+      <small>Rendered locally</small>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== API REFERENCE SLIDER ===== -->
+<div id="apiDrawer" class="api-drawer">
+  <div class="api-drawer-header">
+    <span>API Reference</span>
+    <button onclick="closeApi()">✕</button>
+  </div>
+  <div class="api-drawer-body">
+    <iframe
+      src="/docs"
+      class="api-iframe"
+      title="DataWeave API Reference">
+    </iframe>
+  </div>
+</div>
+
+<script>
+/* Helpers */
+const $ = s => document.querySelector(s);
+const scriptEl = $('#script');
+
+function toBase64Utf8(str){
+  const b = new TextEncoder().encode(str);
+  let r = "";
+  b.forEach(x => r += String.fromCharCode(x));
+  return btoa(r);
+}
+
+function prettyJson(t){
+  try { return JSON.stringify(JSON.parse(t), null, 2); }
+  catch { return t; }
+}
+
+/* Run playground */
+async function runPlayground(){
+  const st = $('#status');
+  const out = $('#output');
+  st.textContent = 'Running...';
+  st.className = '';
+
+  try{
+    const r = await fetch('/api/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': $('#inputMime').value,
+        'dw-script-b64': toBase64Utf8(scriptEl.value)
+      },
+      body: $('#input').value
+    });
+
+    const text = await r.text();
+    out.textContent = prettyJson(text);
+    st.textContent = 'Success';
+    st.className = 'ok';
+  } catch(e){
+    out.textContent = String(e);
+    st.textContent = 'Error';
+    st.className = 'err';
+  }
+}
+
+/* Auto-run */
+let timer = null;
+['input','script'].forEach(id => {
+  $('#'+id).addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(runPlayground, 500);
+  });
+});
+$('#runBtn').onclick = runPlayground;
+
+/* Copy */
+function copyText(id, btn){
+  const el = $('#'+id);
+  const text = el.tagName === 'TEXTAREA' ? el.value : el.innerText;
+  navigator.clipboard.writeText(text);
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy', 1000);
+}
+
+/* Dark mode */
+const toggle = $('#themeToggle');
+const setTheme = m => {
+  document.body.classList.toggle('dark', m === 'dark');
+  localStorage.setItem('theme', m);
+};
+toggle.onclick = () =>
+  setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+setTheme(localStorage.getItem('theme') || 'light');
+
+/* API Drawer */
+const apiDrawer = $('#apiDrawer');
+function openApi(){ apiDrawer.classList.add('open'); }
+function closeApi(){ apiDrawer.classList.remove('open'); }
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') closeApi();
+});
+</script>
+
+</body>
+</html>

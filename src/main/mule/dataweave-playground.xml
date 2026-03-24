@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <!-- HTTP server: http://localhost:8081 -->
+    <http:listener-config name="http_listener_config">
+        <http:listener-connection host="localhost" port="8081"/>
+    </http:listener-config>
+
+    <!-- ============== UI (index.html) ============== -->
+    <!-- Serves the static page from the project folder (Load static resource) -->
+    <flow name="ui-index">
+        <http:listener path="/playground" config-ref="http_listener_config">
+			<http:response >
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : vars.outputMime
+}]]]></http:headers>
+			</http:response>
+		</http:listener>
+		<http:load-static-resource
+            resourceBasePath="C:\Users\Bandaru.Sarngapani\AnypointStudio\new-dev-workspace\dataweave-playground\src\main\resources\web\index.html"/>
+    </flow>
+
+    <!-- ============== API: execute DataWeave ============== -->
+    <flow name="run-flow">
+        <http:listener path="/api/run" allowedMethods="POST" config-ref="http_listener_config"/>
+
+        <!-- Extract headers and pass payload as-is -->
+
+        <!-- Decode the script and run it with dw::Runtime::run -->
+        <ee:transform doc:name="Transform Message" doc:id="4ac110ea-beba-48a8-a284-0d022d05901d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="inputMime" ><![CDATA[attributes.headers.'content-type' default 'application/json']]></ee:set-variable>
+				<ee:set-variable variableName="scriptB64" ><![CDATA[attributes.headers.'dw-script-b64' default '']]></ee:set-variable>
+				<ee:set-variable variableName="outputMime" ><![CDATA[attributes.headers.accept default 'application/json']]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+
+        <!-- Return raw value with its Content-Type when available; otherwise return the envelope -->
+        <!-- [STUDIO:"Transform Message"]<ee:transform doc:name="Transform Message" doc:id="1277c519-4c59-4452-8fe9-75880b12db74" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[output text/plain
+&#45;&#45;-
+write(payload, vars.outputMime)&#93;&#93;></ee:set-payload>
+			</ee:message>
+		</ee:transform> [STUDIO] -->
+		<ee:transform doc:name="Transform Message" doc:id="12f6eb2f-27af-441b-8cfe-3be0fd72b25e" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="result" ><![CDATA[output application/java
+import * from dw::Runtime
+import * from dw::core::Binaries
+var jsonValue = {
+  value: write(payload, vars.inputMime) as Binary {encoding: "UTF-8"},
+  encoding: "UTF-8",
+  properties: {},
+  mimeType: vars.inputMime
+}
+
+var scriptVal = (fromBase64(vars.scriptB64)) as String {encoding: "UTF-8"}
+---
+run("main.dwl", {"main.dwl": scriptVal }, {"payload": jsonValue })
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="2d55ba95-4976-41ba-8052-33d2211beccc" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  success: vars.result.success,
+  value: vars.result.value,
+  message: vars.result.message,
+  mimeType: vars.result.mimeType
+}
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Shape Response">
+            <when expression="#[payload.success == true and payload.mimeType != null]">
+                <ee:transform doc:name="Return Raw">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[vars.result.value]]></ee:set-payload>
+                        <!-- Mule 4: set HTTP response headers via attributes -->
+                        <ee:set-attributes><![CDATA[%dw 2.0
+output application/java
+---
+{
+  statusCode: 200,
+  headers: {
+    "Content-Type": vars.outputMime
+  }
+}
+]]></ee:set-attributes>
+                    </ee:message>
+                </ee:transform>
+            </when>
+
+            <otherwise>
+                <ee:transform doc:name="Return JSON Envelope">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+                        <ee:set-attributes><![CDATA[%dw 2.0
+output application/java
+---
+{
+  statusCode: 200,
+  headers: {
+    "Content-Type": "application/json"
+  }
+}
+]]></ee:set-attributes>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+	<flow name="ui-index1" doc:id="0d92c081-2b79-4177-bb8c-e8949227a0a8" >
+		<http:listener doc:name="Listener" doc:id="d0ddc51a-f2ba-415a-af1c-4f104dfb00ab" config-ref="http_listener_config" path="/docs" >
+			<http:response >
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : vars.outputMime
+}]]]></http:headers>
+			</http:response>
+		</http:listener>
+		<http:load-static-resource doc:name="Load static resource" doc:id="0f81bafe-f95f-4a73-8e49-db7421441246" resourceBasePath="C:\Users\Bandaru.Sarngapani\AnypointStudio\new-dev-workspace\dataweave-playground\src\main\resources\web\docs\index.html" />
+	</flow>
+
+</mule>
